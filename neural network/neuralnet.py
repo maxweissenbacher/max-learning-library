@@ -12,6 +12,8 @@ class NNLearner:
         df : Pandas dataframe
         yName : String
                 Name of the dependent column in the dataframe.
+                We assume that there is only one dependent variable,
+                and that it only takes the two values 0 or 1.
         learningRate : Float
         numIterations : Int
                         Number of iterations for gradient descent.
@@ -29,6 +31,9 @@ class NNLearner:
         NN.coeffs = NN.initCoeffs()
         NN.losses = []
     
+    def __repr__(NN):
+        print('Simple implementation of a neural network with specifiable geometry and learning rate. The network uses a Sigmoid activation function throughout and makes use of Xavier initialisation.')
+
     def tensorFromDf(NN,df,*names):
         """
         Parameters
