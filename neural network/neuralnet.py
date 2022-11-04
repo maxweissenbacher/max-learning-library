@@ -3,6 +3,7 @@ import torch
 from torch import tensor
 from torch.nn import Sigmoid
 import matplotlib.pyplot as plt
+from tqdm import tqdm # progress bar
 
 class NNLearner:
     def __init__(NN,df,yName,learningRate,numIterations=20,lossFn='MSE',geometry=[10,10]):
@@ -120,7 +121,7 @@ class NNLearner:
         This function learns coefficients to fit the data
         by repeating numIterations gradient descent steps.
         """
-        for i in range(NN.numIterations):
+        for i in tqdm(range(NN.numIterations)):
             Ypred = NN.predict(NN.X)
             NN.losses.append(NN.loss(Ypred,NN.Y).item())
             NN.loss(Ypred,NN.Y).backward()
