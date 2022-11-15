@@ -121,7 +121,7 @@ class NNLearner:
         This function learns coefficients to fit the data
         by repeating numIterations gradient descent steps.
         """
-        for i in tqdm(range(NN.numIterations)):
+        for _ in tqdm(range(NN.numIterations)):
             Ypred = NN.predict(NN.X)
             NN.losses.append(NN.loss(Ypred,NN.Y).item())
             NN.loss(Ypred,NN.Y).backward()
