@@ -2,7 +2,12 @@
 title: "Particle filters for stochastic volatility"
 author: "Max Weissenbacher"
 date: "2023-01-11"
-output: html_document
+#output: html_document
+# Store libraries and figures separately
+output:
+  html_document:
+    self_contained: false
+    lib_dir: libs
 ---
 
 ```{r setup, include=FALSE, message=FALSE}
