@@ -2,12 +2,7 @@
 title: "Particle filters for stochastic volatility"
 author: "Max Weissenbacher"
 date: "2023-01-11"
-#output: html_document
-# Store libraries and figures separately
-output:
-  html_document:
-    self_contained: false
-    lib_dir: libs
+output: html_document
 ---
 
 ```{r setup, include=FALSE, message=FALSE}
@@ -17,6 +12,7 @@ library(geometry)
 library('gridExtra')
 library('latex2exp')
 library(knitr)
+library(tidyverse)
 ```
 
 ```{r, code = readLines("particlefilters.R"), echo=FALSE, message=FALSE}
@@ -33,12 +29,12 @@ After simulating data for the hidden Markov model, we apply the three filtering 
 ### Introduction
 
 We consider a hidden Markov model for stochastic volatility. The model is comprised of a Markov chain $X_n$ modeling the volatility of an asset and the observed returns of the asset $Y_n$. The model is defined as follows: 
-$$
+
 \begin{align}
 X_n &= \rho X_{n-1} + \sigma V_n, &V_n \sim N(0,1)\\
 Y_n &= \tau \exp \left( \frac{X_n}{2} \right) W_n, &W_n \sim N(0,1)
 \end{align}
-$$
+
 for constants $\rho, \tau, \sigma \in \mathbb{R}$. We assume that $X_0 \sim N \left(0, \frac{\sigma^2}{1-\rho^2} \right)$. Note that $V_n,W_n$ are noise terms. 
 
 Our task is to infer the *unobservable* or *hidden* state $X_n$ from the history of observations $Y_0, \dots, Y_n$. Expressed in a more precise form, the **filtering problem** consists in estimating
@@ -113,12 +109,12 @@ We store the resulting time series in the vectors `X` (hidden states) respective
 We implement sequential importance sampling (`SIS`), sequential importance resampling (`SIR`) and a resample move particle filter (`RMPF`). The algorithms are sequential versions of importance sampling and can be used for *online* inference in hidden Markov models.
 
 For each time step $n$, we simulate a population of $P$ particles $X^{(i)}_n, i = 1, \dots P$ together with associated weights $W^{(i)}_n$. The weights satisfy $\sum_{i=1}^P W^{(i)}_n = 1$. To estimate the expectation of a function $\varphi(x_n)$, given that we have observed $y_0, \dots y_n$, we can use the following formula:
-$$
+
 \begin{align}
 \mathbb{E}(\varphi(x_n) \mid y_0, \dots y_n) &= \int \varphi(x_n) \, p(d x_n \mid y_0, \dots y_n) \\
 &\approx \sum_{i=1}^P \varphi(X_n^{(i)}) W^{(i)}_n.
 \end{align}
-$$
+
 A detailed description of the `SIR`/`SIS` algorithms can be found in this
 [Wikipedia article on particle filters](https://en.wikipedia.org/wiki/Particle_filter#Sequential_Importance_Resampling_(SIR)). For an explanation of the resample move particle filter, see the [Advanced Computational Methods in Statistics course](https://github.com/nkantas/LTCC-Advanced-Computational-Methods-in-Statistics) by [Nikolas Kantas](https://www.ma.imperial.ac.uk/~nkantas/).
 
