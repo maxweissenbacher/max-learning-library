@@ -1,0 +1,314 @@
+---
+title: "Particle filters for stochastic volatility"
+author: "Max Weissenbacher"
+date: "2023-01-11"
+output: html_document
+---
+
+```{r setup, include=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(geometry)
+library('gridExtra')
+library('latex2exp')
+library(knitr)
+```
+
+```{r, code = readLines("particlefilters.R"), echo=FALSE, message=FALSE}
+```
+
+In this document we simulate a stochastic volatility hidden Markov model and demonstrate our implementation of
+
+- Sequential Importance Sampling (`SIS`),
+- Sequential Importance Resampling (`SIR`),
+- Resample Move Particle Filter (`RMPF`).
+
+After simulating data for the hidden Markov model, we apply the three filtering algorithms, assess their performance and discuss some of the associated theory.
+
+### Introduction
+
+We consider a hidden Markov model for stochastic volatility. The model is comprised of a Markov chain $X_n$ modeling the volatility of an asset and the observed returns of the asset $Y_n$. The model is defined as follows: 
+$$
+\begin{align}
+X_n &= \rho X_{n-1} + \sigma V_n, &V_n \sim N(0,1)\\
+Y_n &= \tau \exp \left( \frac{X_n}{2} \right) W_n, &W_n \sim N(0,1)
+\end{align}
+$$
+for constants $\rho, \tau, \sigma \in \mathbb{R}$. We assume that $X_0 \sim N \left(0, \frac{\sigma^2}{1-\rho^2} \right)$. Note that $V_n,W_n$ are noise terms. 
+
+Our task is to infer the *unobservable* or *hidden* state $X_n$ from the history of observations $Y_0, \dots, Y_n$. Expressed in a more precise form, the **filtering problem** consists in estimating
+$$
+\mathbb{P}(X_n \in \cdot \mid Y_0, \dots, Y_n).
+$$
+Equivalently, we could ask about estimating the expectation
+$$
+\mathbb{E}(\varphi(x_n) \mid y_0, \dots y_n) = \int \varphi(x_n) \, p(d x_n \mid y_0, \dots y_n)
+$$
+for any (sufficiently regular) function $\varphi(x_n)$.
+
+### Simulating the hidden Markov model
+We begin by simulating the hidden states $X_n$ and observations $Y_n$. Below, we will then infer the state $X_n$ using only knowledge of the observations $Y$ and the parameters of the model. We choose the parameters
+```{r Defining parameters, echo=FALSE}
+# Defining parameters for the model
+params = list('rho' = 0.9,
+              'sigma' = 1.05,
+              'tau' = 0.7)
+```
+
+$$
+\rho = `r params$rho`, \quad \sigma = `r params$sigma`, \quad \tau = `r params$tau`.
+$$
+Running a simulation of the hidden and observable states yields the following trajectories:
+```{r Simulation, echo=FALSE}
+# Number of time steps
+t <- 200
+# Generate X
+X <- c(rnorm(1,
+             mean = 0,
+             sd =  params$sigma^2/(1-params$rho^2)))
+for (i in 2:t) {
+  x = params$rho*X[i-1]+params$sigma*rnorm(1)
+  X = append(X,x)
+}
+
+# Generate Y
+Y = c()
+for (i in 1:length(X)) {
+  Y = append(Y, params$tau*exp(X[i]/2)*rnorm(1))
+}
+
+# Plot X and Y next to each other
+aspectRatio <- 1
+
+plot_x <- data.frame('X' = X) %>%
+  mutate(n = 1:t) %>%
+  ggplot() +
+  geom_line(aes(x=n,y=X)) +
+  labs(x = 'Time n', y = TeX(r'($X_n$)'), title = TeX(r'(Hidden state $X$)')) +
+  guides(fill = "none") +
+  theme(aspect.ratio=aspectRatio)
+
+plot_y <- data.frame('X' = Y) %>%
+  mutate(n = 1:t) %>%
+  ggplot() +
+  geom_line(aes(x=n,y=Y)) +
+  labs(x = 'Time n', y = TeX(r'($Y_n$)'), title = TeX(r'(Observed state $Y$)')) +
+  guides(fill = "none") +
+  theme(aspect.ratio=aspectRatio)
+
+grid.arrange(plot_x,
+             plot_y,
+             ncol = 2)
+```
+
+We store the resulting time series in the vectors `X` (hidden states) respectively `Y` (observed states).
+
+### Sequential Importance (Re-)Sampling
+
+We implement sequential importance sampling (`SIS`), sequential importance resampling (`SIR`) and a resample move particle filter (`RMPF`). The algorithms are sequential versions of importance sampling and can be used for *online* inference in hidden Markov models.
+
+For each time step $n$, we simulate a population of $P$ particles $X^{(i)}_n, i = 1, \dots P$ together with associated weights $W^{(i)}_n$. The weights satisfy $\sum_{i=1}^P W^{(i)}_n = 1$. To estimate the expectation of a function $\varphi(x_n)$, given that we have observed $y_0, \dots y_n$, we can use the following formula:
+$$
+\begin{align}
+\mathbb{E}(\varphi(x_n) \mid y_0, \dots y_n) &= \int \varphi(x_n) \, p(d x_n \mid y_0, \dots y_n) \\
+&\approx \sum_{i=1}^P \varphi(X_n^{(i)}) W^{(i)}_n.
+\end{align}
+$$
+A detailed description of the `SIR`/`SIS` algorithms can be found in this
+[Wikipedia article on particle filters](https://en.wikipedia.org/wiki/Particle_filter#Sequential_Importance_Resampling_(SIR)). For an explanation of the resample move particle filter, see the [Advanced Computational Methods in Statistics course](https://github.com/nkantas/LTCC-Advanced-Computational-Methods-in-Statistics) by [Nikolas Kantas](https://www.ma.imperial.ac.uk/~nkantas/).
+
+The function `SequentialImportanceSampling` accepts the observed data `Y`, the model parameters, as well as several hyperparameters. All three algorithms use the bootstrap proposal. The MCMC (Markov chain Monte Carlo) algorithm used for the resampling move is Random walk Metropolis Hastings. The implementation of the algorithms is contained in the `particlefilters.R` file, which is also part of this repository.
+
+```{r Appying filters}
+N <- 700 # number of particles
+SIS <- SequentialImportanceSampling(data = Y,
+                                    params = params,
+                                    num_particles = N)
+SIR <- SequentialImportanceSampling(data = Y,
+                                    params = params,
+                                    num_particles = N,
+                                    resample = TRUE)
+RMPF <- SequentialImportanceSampling(data = Y,
+                                     params = params,
+                                     num_particles = N,
+                                     resample = TRUE,
+                                     move = TRUE,
+                                     rsmpl_steps = 5,
+                                     stepSize = 4)
+```
+
+```{r Plotting means, echo = FALSE}
+# Extracting means and variances at each time
+mu_SIS <- filterMean(SIS$X,SIS$W)
+v_SIS <- filterVariance(SIS$X,SIS$W)
+mu_SIR <- filterMean(SIR$X,SIR$W)
+v_SIR <- filterVariance(SIR$X,SIR$W)
+mu_RMPF <- filterMean(RMPF$X,RMPF$W)
+v_RMPF <- filterVariance(RMPF$X,RMPF$W)
+
+# Defining custom pastell colours
+col1 <- rgb(27,158,119,max=255)
+col2 <- rgb(217,95,2,max=255)
+col3 <- rgb(117,112,179,max=255)
+# col1 <- rgb(127,201,127,max=255)
+# col2 <- rgb(189,173,212,max=255)
+# col3 <- rgb(253,192,134,max=255)
+# col1 <- rgb(252,141,98,max=255)
+# col2 <- rgb(141,160,203,max=255)
+# col3 <- rgb(231,138,195,max=255)
+colors_4_plot <- c('black',col1,col2,col3)
+names_4_plot  <- c("True state","SIS","SIR", "RMPF")
+colors_3_plot <- colors_4_plot[-1]
+names_3_plot  <- names_4_plot[-1]
+
+# Plotting
+df <- data.frame('mu_SIS' = mu_SIS,
+                 'var_SIS' = v_SIS,
+                 'mu_SIR' = mu_SIR,
+                 'var_SIR' = v_SIR,
+                 'mu_RMPF' = mu_RMPF,
+                 'var_RMPF' = v_RMPF)
+df %>%
+  mutate(n = 1:t) %>%
+  mutate(X = X) %>%
+  # Plotting X
+  ggplot() +
+  geom_line(aes(x=n,y=X, color = 'True state')) +
+  # Plotting the three filters
+  geom_line(aes(x=n,y=mu_SIS, color='SIS')) +
+  geom_line(aes(x=n,y=mu_SIR, color='SIR')) +
+  geom_line(aes(x=n,y=mu_RMPF, color='RMPF')) +
+  # Labels and legend
+  labs(x = 'Time n', y = TeX(r'($X_n$ vs. $E[X_n | Y_0 ... Y_n]$)'), title = 'True state vs. SIS/SIR/RMPF filter') +
+  guides(fill = "none") +
+  theme(aspect.ratio = 1/2) +
+  theme(legend.position = "bottom") +
+  theme(legend.title=element_blank()) +
+  scale_color_manual(values = setNames(colors_4_plot, names_4_plot))
+
+df %>%
+  mutate(n = 1:t) %>%
+  mutate(X = X) %>%
+  # Plotting the three filters
+  ggplot() +
+  geom_line(aes(x=n,y=var_SIS, color='SIS')) +
+  geom_line(aes(x=n,y=var_SIR, color='SIR')) +
+  geom_line(aes(x=n,y=var_RMPF, color='RMPF')) +
+  # Labels and legend
+  labs(x = 'Time n', y = TeX(r'($V[X_n | Y_0 ... Y_n]$)'), title = 'Estimated variance of SIS/SIR/RMPF filter') +
+  guides(fill = "none") +
+  theme(aspect.ratio = 1/2) +
+  theme(legend.position = "bottom") +
+  theme(legend.title=element_blank()) +
+  scale_color_manual(values = setNames(colors_3_plot, names_3_plot))
+```
+
+
+```{r Computing mean acceptance ratio, echo = FALSE}
+mean_accRatio_truncated <- formatC(mean(RMPF$accRatio), digits=2, format='f')
+var_accRatio_truncated  <- formatC(var(RMPF$accRatio), digits=5, format='f')
+```
+
+We compute the root mean squared error for each algorithm to be
+```{r Mean squared error, echo=FALSE, results='asis'}
+MSE_table <- data.frame('SIS'  = rmse(X,mu_SIS),
+                        'SIR'  = rmse(X,mu_SIR),
+                        'RMPF' = rmse(X,mu_RMPF))
+rownames(MSE_table) <- c('Root mean squared error')
+
+kable(MSE_table)
+```
+
+### Fine tuning of MCMC step size
+The step size of the resampling move needs to be finetuned to ensure the acceptance ratio of the Metropolis Hastings algorithm is in a good range (between $0.2$ and $0.4$). Here we adjusted the step size manually for the given model parameters. In practice, conducting a hyperparameter search might be advantageous. For the current run we obtained a mean acceptance ratio of `r mean_accRatio_truncated` with variance `r var_accRatio_truncated`.
+
+### Weight degeneracy
+We observe that the `SIS` algorithm tracks the true state well for a few (~ 30) time steps and after that it diverts significantly from the true hidden state. This may be explained by *weight degeneracy*: as $n$ grows, the weights $W^{(i)}_n$ of most particles tend to $0$, while a few particles have weights very close to $1$. This effectively renders most of the simulated particles ineffective. The `SIR` algorithm addresses this issue by taking inspiration from genetic algorithms and resampling particles according to the distribution of weights.
+
+We can assess the effect of weight degeneracy using *effective sample size*. It is defined in terms of the weights at time $n$ as
+$$
+\text{ESS}_n = \left( \sum_{i=1}^P \left(W^{(i)}_n\right)^2 \right)^{-1} \in [1,P]
+$$
+An effective sample size of $P$ (the total number of particles used in the simulation) indicates that the algorithm performs as well as perfect Monte Carlo, while an effective sample size close to $1$ suggests poor performance. Below we plot $\text{ESS}_n$ for all three algorithms.
+
+```{r Plotting effective sample size, echo=FALSE}
+# Plotting effective sample size
+df_ess <- data.frame('SIS'  = SIS$ESS,
+                     'SIR'  = SIR$ESS,
+                     'RMPF' = RMPF$ESS)
+df_ess %>%
+  mutate(n = 1:t) %>%
+  # Plotting X
+  ggplot() +
+  geom_line(aes(x=n,y=SIS, color = 'SIS')) +
+  geom_line(aes(x=n,y=SIR, color='SIR')) +
+  geom_line(aes(x=n,y=RMPF, color='RMPF')) +
+  # Labels and legend
+  labs(x = 'Time t', y = "ESS", title = 'Effective sample size') +
+  guides(fill = "none") +
+  theme(aspect.ratio = 1/2) +
+  theme(legend.position = "bottom") +
+  theme(legend.title=element_blank()) +
+  scale_color_manual(values = setNames(colors_3_plot, names_3_plot))
+```
+
+The mean effective sample size for each of the algorithms is
+```{r Mean effective sample size, echo=FALSE, results='asis'}
+ESS_table <- data.frame('SIS'  = c(mean(SIS$ESS),N),
+                        'SIR'  = c(mean(SIR$ESS),N),
+                        'RMPF' = c(mean(RMPF$ESS),N))
+ESS_table <- round(ESS_table)
+rownames(ESS_table) <- c('Effective sample size (rounded)', 'Number of particles in simulation')
+
+kable(ESS_table)
+```
+
+
+### Path degeneracy
+Resampling in the `SIR` algorithm introduces the issue of *path degeneracy*. This effectively means that marginals of the form $p(x_{n-L}:n \mid y_{0}, \dots y_n )$ for small $L$ will be well approximated at the expense of losing particle diversity for early times. To counteract path degeneracy, the `RMPF` algorithm moves each particle $X^{(i)}$ by using a few iterations of a Markov chain Monte Carlo (MCMC) algorithm targeting the correct density. This re-introduces particle diversity.
+
+### Monte Carlo variance
+Finally, we compute the Monte Carlo variance for the mean for each of the three algorithms. We simulate multiple runs of each algorithm and compute the variance of the estimated mean as a function of time.
+
+```{r Monte Carlo Variance, echo = FALSE}
+mcvar_SIS <- montecarlovar(data = Y, # observed data
+                           params = params, # model parameters
+                           resample = FALSE, # Resampling?
+                           move = FALSE # Particle Move?
+                           )
+
+mcvar_SIR <- montecarlovar(data = Y, # observed data
+                           params = params, # model parameters
+                           resample = TRUE, # Resampling?
+                           move = FALSE # Particle Move?
+                           )
+
+mcvar_RMPF <- montecarlovar(data = Y, # observed data
+                            params = params, # model parameters
+                            resample = TRUE, # Resampling?
+                            move = TRUE, # Particle Move?
+                            rsmpl_steps = 5, # number of resampling steps,
+                            stepSize = 4 # MCMC step size
+                            )
+
+df_mcvar <- data.frame('SIS'  = mcvar_SIS,
+                       'SIR'  = mcvar_SIR,
+                       'RMPF' = mcvar_RMPF)
+df_mcvar %>%
+  mutate(n = 1:t) %>%
+  # Plotting X
+  ggplot() +
+  geom_line(aes(x=n,y=SIS, color = 'SIS')) +
+  geom_line(aes(x=n,y=SIR, color='SIR')) +
+  geom_line(aes(x=n,y=RMPF, color='RMPF')) +
+  # Labels and legend
+  labs(x = 'Time t', y = "Variance", title = 'Monte Carlo variance') +
+  guides(fill = "none") +
+  theme(aspect.ratio = 1/2) +
+  theme(legend.position = "bottom") +
+  theme(legend.title=element_blank()) +
+  scale_color_manual(values = setNames(colors_3_plot, names_3_plot))
+
+```
+
+
