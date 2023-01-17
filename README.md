@@ -12,4 +12,4 @@ A simple machine learning library featuring proof-of-concept implementations of 
 - K-Means Clustering ([Jupyter Notebook demo](https://github.com/maxweissenbacher/max-learning-library/blob/main/K%20Means/K%20means.ipynb))
 
 ## Organisation of the repository
-The project is organised into different folders. Each folder contains the implementation of a different algorithm alongside a `Jupyter Notebook`,`R Markdown` document or `Shiny` web app to demonstrate the use of the algorithm. The links in the list above take you directly to the demos.
+The project is organised into different folders. Each folder contains the implementation of a different algorithm alongside a `Jupyter` notebook,`R Markdown` document or `Shiny` web app to demonstrate the use of the algorithm. The links in the list above take you directly to the demos.
