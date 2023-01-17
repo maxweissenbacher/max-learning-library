@@ -1,6 +1,0 @@
-*.ipynb_checkpoints
-*.DS_Store
-*.vscode
-k means/__pycache__/kmeans.cpython-39.pyc
-Pipfile
-Pipfile.lock
