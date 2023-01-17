@@ -96,7 +96,7 @@ ui <- fluidPage(
            HTML("<ul><li>Gaussian (or Radial Basis Function)</li>
                 <li>Exponential Sine Squared</li>
                 <li>Rational Quadratic</li></ul>"),
-           HTML("<p>The code for the app and the implementation in <code>R</code> of the smoothing and ridge regression algorithms can be found on <a href=''>GitHub</a>.")
+           HTML("<p>The code for the app and the implementation in <code>R</code> of the smoothing and ridge regression algorithms can be found on <a href='https://github.com/maxweissenbacher/max-learning-library/tree/main/Kernel%20Ridge%20Regression%20and%20Smoothing'>GitHub</a>.")
         )
     )
 )
