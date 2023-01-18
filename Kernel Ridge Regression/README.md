@@ -2,4 +2,4 @@ This folder contains an implementation of Kernel Ridge Regression and Kernel Smo
 
 The interactive web app can be accessed [here](https://maxweissenbacher.shinyapps.io/kernel_ridge_regression/).
 
-The code for the algorithms is contained in the file `kernel_smoothing_regression.R`.
+The code for the algorithms is contained in the file `kernel_smoothing_regression.R`, while the implementation of the `Shiny` web app is contained in `app.R`.
